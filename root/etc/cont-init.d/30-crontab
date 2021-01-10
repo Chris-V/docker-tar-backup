@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv bash
+
+pruned_config=`echo "${CRONTAB}" | sed -r 's/[^0-9*,/ -]//g'`
+IFS=' ' read minutes hours day_of_month month day_of_week _ <<< $(echo "$pruned_config")
+config="${minutes:-*} ${hours:-*} ${day_of_month:-*} ${month:-*} ${day_of_week:-*}"
+
+echo "Setting crontab config: ${config}"
+
+mkdir -p /etc/crontabs
+echo "${config} /usr/bin/make_backup.sh 2>&1" > /etc/crontabs/root

@@ -1,0 +1,96 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - v*.*.*
+      - v*.*.*-*
+
+jobs:
+  buildx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Prepare image data
+        id: image_data
+        run: |
+          DOCKER_IMAGE=ghcr.io/$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')/tar-backup
+
+          VERSION=dev
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ $GITHUB_REF == refs/heads/* ]]; then
+            VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
+            if [ "${{ github.event.repository.default_branch }}" = "$VERSION" ]; then
+              VERSION=edge
+            fi
+          elif [[ $GITHUB_REF == refs/pull/* ]]; then
+            VERSION=pr-${{ github.event.number }}
+          fi
+
+          TAGS="${DOCKER_IMAGE}:${VERSION}"
+          if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(-[0-9]{1,3})?$ ]]; then
+            if [[ $VERSION =~ ^v[0-9.]+-[0-9]{1,3}$ ]]; then
+              PATCH=${VERSION%-*}
+              TAGS="$TAGS,${DOCKER_IMAGE}:${PATCH}"
+            fi
+            MINOR=${VERSION%.*}
+            MAJOR=${MINOR%.*}
+            TAGS="$TAGS,${DOCKER_IMAGE}:${MINOR},${DOCKER_IMAGE}:${MAJOR},${DOCKER_IMAGE}:latest"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            TAGS="$TAGS,${DOCKER_IMAGE}:sha-${GITHUB_SHA::8}"
+          fi
+          echo ::set-output name=version::${VERSION}
+          echo ::set-output name=tags::${TAGS}
+          echo ::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          echo ::set-output name=push::$(git merge-base --is-ancestor $GITHUB_SHA origin/${{ github.event.repository.default_branch }} && echo 'true' || echo 'false')
+
+      - name: Login to GHCR
+        if: steps.image_data.outputs.push == 'true'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.image_data.outputs.push == 'true' }}
+          tags: ${{ steps.image_data.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=${{ github.event.repository.name }}
+            org.opencontainers.image.description=${{ github.event.repository.description }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.version=${{ steps.image_data.outputs.version }}
+            org.opencontainers.image.created=${{ steps.image_data.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}

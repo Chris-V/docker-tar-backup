@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bash
+
+[[ ! -f /config/rotate-backup.ini ]] && \
+    cp /defaults/rotate-backup.ini /config/rotate-backup.ini
+
+[[ ! -f /config/tar-exclusions.txt ]] && \
+    cp /defaults/tar-exclusions.txt /config/tar-exclusions.txt
+
+chown -R abc:abc /config
