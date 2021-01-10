@@ -1,4 +1,4 @@
-FROM ghcr.io/linuxserver/baseimage-alpine-nginx:3.12
+FROM ghcr.io/linuxserver/baseimage-alpine:3.12
 
 ARG ROTATE_BACKUPS_VERSION=8.1
 
