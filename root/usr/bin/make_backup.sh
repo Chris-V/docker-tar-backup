@@ -27,7 +27,7 @@ if [[ -n "${PAUSE_CONTAINERS}" ]]; then
     unpause() {
         log INFO "Unpausing containers '${PAUSE_CONTAINERS}'..."
 
-        docker unpause "$PAUSE_CONTAINERS"
+        docker unpause $PAUSE_CONTAINERS
         if [ $? = 0 ]; then
             log INFO "Unpausing containers done."
         else
@@ -38,7 +38,7 @@ if [[ -n "${PAUSE_CONTAINERS}" ]]; then
 
     log INFO "Pausing containers '${PAUSE_CONTAINERS}'..."
 
-    docker pause "$PAUSE_CONTAINERS"
+    docker pause $PAUSE_CONTAINERS
 
     if [ $? = 0 ]; then
         trap unpause EXIT
